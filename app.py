@@ -136,8 +136,9 @@ UFS_DISP = sorted(DF["uf"].unique().tolist())
 
 # ─── Layout ───────────────────────────────────────────────────────────────────
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY], suppress_callback_exceptions=True)
-app.title = "Desigualdade de Renda no Brasil"
+_DARKLY = "https://cdn.jsdelivr.net/npm/bootswatch@5/dist/darkly/bootstrap.min.css"
+app = Dash(__name__, external_stylesheets=[_DARKLY], suppress_callback_exceptions=True)
+app.title = "Desigualdade de Renda no Brasil [DARK]"
 
 HEADER = dbc.Row(
     dbc.Col([
@@ -407,7 +408,7 @@ def serie_update_fig(dimensao, ufs, grupos, uf_sel):
         xaxis_title="Ano",
         yaxis_title="R$ (preços médios do ano)",
         hovermode="x unified",
-        template="plotly_white",
+        template="plotly_dark",
         legend=dict(orientation="v", x=1.01),
     )
     return fig
@@ -470,10 +471,12 @@ def mapa_update(dimensao, ano):
             g_b: f"R$ {g_b}",
         },
     )
-    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_geos(fitbounds="locations", visible=False, bgcolor="rgba(0,0,0,0)")
     fig.update_layout(
         title=f"Razão de renda {g_a} ÷ {g_b} por UF — {ano}",
         margin=dict(l=0, r=0, t=40, b=0),
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
         coloraxis_colorbar=dict(
             title=f"{g_a}/{g_b}",
             tickformat=".2f",
@@ -598,7 +601,7 @@ def gap_update_fig(dimensao, g_a, g_b, ano, uf_sel):
         title=f"Gap de renda: {g_a} vs {g_b} por UF — {ano}",
         xaxis_title="Rendimento médio mensal real (R$)",
         yaxis_title="",
-        template="plotly_white",
+        template="plotly_dark",
         legend_title="Região",
         hovermode="closest",
     )
@@ -725,7 +728,7 @@ def slope_update_fig(dimensao, grupo, ano_a, ano_b, regioes, uf_sel):
             range=[ano_a - 1.5, ano_b + 1.5],
         ),
         yaxis_title="Rendimento médio mensal real (R$)",
-        template="plotly_white",
+        template="plotly_dark",
         legend_title="Região",
         hovermode="closest",
     )
