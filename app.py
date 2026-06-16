@@ -136,7 +136,7 @@ UFS_DISP = sorted(DF["uf"].unique().tolist())
 
 # ─── Layout ───────────────────────────────────────────────────────────────────
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY], suppress_callback_exceptions=True)
 app.title = "Desigualdade de Renda no Brasil"
 
 HEADER = dbc.Row(
@@ -163,7 +163,13 @@ TABS = dbc.Tabs(
 )
 
 app.layout = dbc.Container(
-    [HEADER, TABS, html.Div(id="conteudo-tab", className="mt-3")],
+    [
+        HEADER,
+        html.Div(id="uf-indicador", className="mb-2", style={"minHeight": "38px"}),
+        TABS,
+        html.Div(id="conteudo-tab", className="mt-3"),
+        dcc.Store(id="uf-selecionada", data=None),
+    ],
     fluid=True,
 )
 
@@ -301,6 +307,41 @@ def render_tab(tab):
         ])
 
 
+# ─── Callbacks: Seleção cross-tab ────────────────────────────────────────────
+
+@app.callback(
+    Output("uf-selecionada", "data"),
+    Input("mapa-fig", "clickData"),
+    prevent_initial_call=True,
+)
+def selecionar_uf(click_data):
+    if not click_data:
+        return None
+    return click_data["points"][0].get("hovertext")
+
+
+@app.callback(
+    Output("uf-indicador", "children"),
+    Input("uf-selecionada", "data"),
+)
+def mostrar_indicador(uf):
+    if not uf:
+        return html.Small(
+            "💡 Clique em um estado no mapa para destacá-lo nas demais visualizações.",
+            className="text-muted fst-italic",
+        )
+    sigla = UF_SIGLA.get(uf, "")
+    return dbc.Alert(
+        [
+            html.Strong(f"📍 {uf} ({sigla}) selecionado — "),
+            "destacado nas outras abas. Clique em outro estado para mudar.",
+        ],
+        color="info",
+        className="py-1 px-3 mb-0",
+        style={"fontSize": "0.875rem"},
+    )
+
+
 # ─── Callbacks: Série Temporal ────────────────────────────────────────────────
 
 @app.callback(
@@ -321,27 +362,39 @@ def serie_update_grupos(dimensao):
     Input("serie-dimensao", "value"),
     Input("serie-ufs", "value"),
     Input("serie-grupos", "value"),
+    Input("uf-selecionada", "data"),
 )
-def serie_update_fig(dimensao, ufs, grupos):
+def serie_update_fig(dimensao, ufs, grupos, uf_sel):
     if not ufs or not grupos:
         return go.Figure()
 
+    # Auto-inclui a UF selecionada caso não esteja na lista
+    ufs_efetivos = list(ufs[:5])
+    if uf_sel and uf_sel not in ufs_efetivos:
+        ufs_efetivos = [uf_sel] + ufs_efetivos[:4]
+
     df = DF[
         (DF["dimensao"] == dimensao) &
-        (DF["uf"].isin(ufs[:5])) &
+        (DF["uf"].isin(ufs_efetivos)) &
         (DF["grupo"].isin(grupos))
     ].sort_values("ano")
 
     fig = go.Figure()
     for (uf, grupo), sub in df.groupby(["uf", "grupo"]):
         cor = CORES_GRUPO.get(grupo, "#888")
-        estilo = "solid" if ufs.index(uf) % 2 == 0 else "dash"
+        destaque = bool(uf_sel and uf == uf_sel)
+        idx = ufs_efetivos.index(uf) if uf in ufs_efetivos else 0
+        estilo = "solid" if (destaque or idx % 2 == 0) else "dash"
         fig.add_trace(go.Scatter(
             x=sub["ano"], y=sub["rendimento"],
             mode="lines+markers",
-            name=f"{sub['sigla'].iloc[0]} — {grupo}",
-            line=dict(color=cor, width=2, dash=estilo),
-            marker=dict(size=5),
+            name=f"{'★ ' if destaque else ''}{sub['sigla'].iloc[0]} — {grupo}",
+            line=dict(color=cor, width=3 if destaque else 1.5, dash=estilo),
+            marker=dict(
+                size=8 if destaque else 5,
+                line=dict(width=1.5, color="black") if destaque else dict(width=0),
+            ),
+            opacity=1.0 if (destaque or not uf_sel) else 0.4,
             hovertemplate=(
                 "<b>%{fullData.name}</b><br>"
                 "Ano: %{x}<br>"
@@ -466,8 +519,9 @@ def gap_update_grupos(dimensao):
     Input("gap-grupo-a", "value"),
     Input("gap-grupo-b", "value"),
     Input("gap-ano", "value"),
+    Input("uf-selecionada", "data"),
 )
-def gap_update_fig(dimensao, g_a, g_b, ano):
+def gap_update_fig(dimensao, g_a, g_b, ano, uf_sel):
     if not g_a or not g_b or g_a == g_b:
         return go.Figure()
 
@@ -489,14 +543,16 @@ def gap_update_fig(dimensao, g_a, g_b, ano):
 
     fig = go.Figure()
 
-    # Linhas conectando os dois grupos (uma por UF)
+    # Linhas conectando os dois grupos
     for _, row in pivot.iterrows():
         cor = CORES_REGIAO.get(row["regiao"], "#aaa")
+        destaque = bool(uf_sel and row["uf"] == uf_sel)
         fig.add_trace(go.Scatter(
             x=[row[g_b], row[g_a]],
             y=[row["sigla"], row["sigla"]],
             mode="lines",
-            line=dict(color=cor, width=2),
+            line=dict(color=cor, width=4 if destaque else 2),
+            opacity=1.0 if (destaque or not uf_sel) else 0.25,
             showlegend=False,
             hoverinfo="skip",
         ))
@@ -505,11 +561,18 @@ def gap_update_fig(dimensao, g_a, g_b, ano):
     for grupo, simbolo in [(g_b, "circle"), (g_a, "diamond")]:
         for _, row in pivot.iterrows():
             cor = CORES_REGIAO.get(row["regiao"], "#aaa")
+            destaque = bool(uf_sel and row["uf"] == uf_sel)
             fig.add_trace(go.Scatter(
                 x=[row[grupo]],
                 y=[row["sigla"]],
                 mode="markers",
-                marker=dict(size=10, color=cor, symbol=simbolo),
+                marker=dict(
+                    size=14 if destaque else 10,
+                    color=cor,
+                    symbol=simbolo,
+                    line=dict(color="black", width=2) if destaque else dict(width=0),
+                ),
+                opacity=1.0 if (destaque or not uf_sel) else 0.25,
                 showlegend=False,
                 hovertemplate=(
                     f"<b>{row['uf']}</b><br>"
@@ -526,7 +589,6 @@ def gap_update_fig(dimensao, g_a, g_b, ano):
             line=dict(color=cor, width=2),
             name=regiao, legendgroup=regiao,
         ))
-    # Símbolos dos grupos
     fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
         marker=dict(size=10, symbol="diamond", color="#555"), name=f"{g_a} (diamante)"))
     fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers",
@@ -565,8 +627,9 @@ def slope_update_grupos(dimensao):
     Input("slope-ano-a", "value"),
     Input("slope-ano-b", "value"),
     Input("slope-regioes", "value"),
+    Input("uf-selecionada", "data"),
 )
-def slope_update_fig(dimensao, grupo, ano_a, ano_b, regioes):
+def slope_update_fig(dimensao, grupo, ano_a, ano_b, regioes, uf_sel):
     if not grupo or ano_a == ano_b or not regioes:
         return go.Figure()
 
@@ -588,10 +651,13 @@ def slope_update_fig(dimensao, grupo, ano_a, ano_b, regioes):
 
     fig = go.Figure()
 
+    # Desenha UFs não-selecionadas primeiro (ficam abaixo)
     for _, row in pivot.iterrows():
+        destaque = bool(uf_sel and row["uf"] == uf_sel)
+        if destaque:
+            continue  # deixa para o segundo passo
         cor = CORES_REGIAO.get(row["regiao"], "#aaa")
         largura = 1.0 + abs(row["var_pct"]) / 40.0
-
         fig.add_trace(go.Scatter(
             x=[ano_a, ano_b],
             y=[row[ano_a], row[ano_b]],
@@ -603,6 +669,7 @@ def slope_update_fig(dimensao, grupo, ano_a, ano_b, regioes):
             textfont=dict(size=9, color=cor),
             legendgroup=row["regiao"],
             showlegend=False,
+            opacity=0.35 if uf_sel else 1.0,
             hovertemplate=(
                 f"<b>{row['uf']}</b> — {grupo}<br>"
                 f"{ano_a}: R$ {row[ano_a]:,.0f}<br>"
@@ -610,6 +677,34 @@ def slope_update_fig(dimensao, grupo, ano_a, ano_b, regioes):
                 f"Variação: {row['var_pct']:+.1f}%<extra></extra>"
             ),
         ))
+
+    # Desenha a UF selecionada por último (fica no topo)
+    if uf_sel:
+        sel_rows = pivot[pivot["uf"] == uf_sel]
+        for _, row in sel_rows.iterrows():
+            cor = CORES_REGIAO.get(row["regiao"], "#333")
+            largura = 3.0 + abs(row["var_pct"]) / 40.0
+            fig.add_trace(go.Scatter(
+                x=[ano_a, ano_b],
+                y=[row[ano_a], row[ano_b]],
+                mode="lines+markers+text",
+                line=dict(color=cor, width=largura),
+                marker=dict(
+                    size=11, color=cor,
+                    line=dict(color="black", width=2),
+                ),
+                text=[f"★{row['sigla']}", f"★{row['sigla']}"],
+                textposition=["middle left", "middle right"],
+                textfont=dict(size=11, color="black"),
+                legendgroup=row["regiao"],
+                showlegend=False,
+                hovertemplate=(
+                    f"<b>{row['uf']}</b> — {grupo}<br>"
+                    f"{ano_a}: R$ {row[ano_a]:,.0f}<br>"
+                    f"{ano_b}: R$ {row[ano_b]:,.0f}<br>"
+                    f"Variação: {row['var_pct']:+.1f}%<extra></extra>"
+                ),
+            ))
 
     for regiao, cor in CORES_REGIAO.items():
         if regiao in regioes:
