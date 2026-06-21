@@ -138,44 +138,18 @@ UFS_DISP = sorted(DF["uf"].unique().tolist())
 
 _DARKLY = "https://cdn.jsdelivr.net/npm/bootswatch@5/dist/darkly/bootstrap.min.css"
 app = Dash(__name__, external_stylesheets=[_DARKLY], suppress_callback_exceptions=True)
-app.title = "Desigualdade de Renda no Brasil [DARK]"
+app.title = "Desigualdade de Renda no Brasil"
 
-HEADER = dbc.Row(
-    dbc.Col([
-        html.H2("Desigualdade de Renda no Brasil", className="mt-4 mb-1 fw-bold"),
-        html.P(
-            "Rendimento médio mensal real (R$) por sexo e cor/raça — "
-            "PNAD Contínua Anual | SIDRA/IBGE | 2012–2024",
-            className="text-muted",
-        ),
-        html.Hr(),
-    ])
-)
+HEADER = dbc.Row(dbc.Col([
+    html.H4("Desigualdade de Renda no Brasil", className="mt-3 mb-0 fw-bold"),
+    html.P(
+        "Rendimento médio mensal real (R$) por sexo e cor/raça — "
+        "PNAD Contínua Anual | SIDRA/IBGE | 2012–2024",
+        className="text-muted small mb-1",
+    ),
+    html.Hr(className="mt-1 mb-2"),
+]))
 
-TABS = dbc.Tabs(
-    [
-        dbc.Tab(label="📈 Série Temporal",       tab_id="serie"),
-        dbc.Tab(label="🗺️ Mapa de Disparidade",  tab_id="mapa"),
-        dbc.Tab(label="↔️ Gap por UF",           tab_id="gap"),
-        dbc.Tab(label="📉 Slope Chart",          tab_id="slope"),
-    ],
-    id="tabs",
-    active_tab="serie",
-)
-
-app.layout = dbc.Container(
-    [
-        HEADER,
-        html.Div(id="uf-indicador", className="mb-2", style={"minHeight": "38px"}),
-        TABS,
-        html.Div(id="conteudo-tab", className="mt-3"),
-        dcc.Store(id="uf-selecionada", data=None),
-    ],
-    fluid=True,
-)
-
-
-# ─── Renderização de abas ─────────────────────────────────────────────────────
 
 def _radio_dimensao(id_prefix):
     return dcc.RadioItems(
@@ -186,8 +160,7 @@ def _radio_dimensao(id_prefix):
         ],
         value="Sexo",
         inline=True,
-        inputStyle={"marginRight": "4px", "marginLeft": "12px"},
-        className="mb-2",
+        inputStyle={"marginRight": "4px", "marginLeft": "10px"},
     )
 
 
@@ -202,110 +175,109 @@ def _slider_ano(id_prefix, value=None):
     )
 
 
-@app.callback(Output("conteudo-tab", "children"), Input("tabs", "active_tab"))
-def render_tab(tab):
-    if tab == "serie":
-        return dbc.Row([
-            dbc.Col([
-                html.Label("Dimensão", className="fw-semibold"),
-                _radio_dimensao("serie"),
-                html.Label("Estados (selecione até 5)", className="fw-semibold mt-3"),
-                dcc.Dropdown(
-                    id="serie-ufs",
-                    options=[{"label": u, "value": u} for u in UFS_DISP],
-                    value=["São Paulo", "Bahia", "Maranhão"],
-                    multi=True,
-                ),
-                html.Label("Grupos", className="fw-semibold mt-3"),
-                dcc.Checklist(id="serie-grupos", inputStyle={"marginRight": "6px"}),
-                html.Hr(),
-                html.Small(
-                    "Passe o mouse sobre as linhas para ver valores. "
-                    "Clique na legenda para mostrar/ocultar grupos.",
-                    className="text-muted",
-                ),
-            ], width=3),
-            dbc.Col(dcc.Graph(id="serie-fig", style={"height": "560px"}), width=9),
-        ])
+# ─── Grade 2×2 ────────────────────────────────────────────────────────────────
 
-    elif tab == "mapa":
-        return dbc.Row([
-            dbc.Col([
-                html.Label("Métrica exibida", className="fw-semibold"),
-                dcc.RadioItems(
-                    id="mapa-dimensao",
-                    options=[
-                        {"label": "  Razão Homens ÷ Mulheres", "value": "Sexo"},
-                        {"label": "  Razão Branca ÷ Preta",    "value": "Cor/Raça"},
-                    ],
-                    value="Sexo",
-                    inline=False,
-                    inputStyle={"marginRight": "4px", "marginLeft": "12px"},
-                    className="mb-3",
-                ),
-                html.Label("Ano", className="fw-semibold"),
-                _slider_ano("mapa"),
-                html.Div(id="mapa-stats", className="mt-4"),
-            ], width=3),
-            dbc.Col(dcc.Graph(id="mapa-fig", style={"height": "580px"}), width=9),
-        ])
+_s = {"fontSize": "0.8rem"}
 
-    elif tab == "gap":
-        return dbc.Row([
-            dbc.Col([
-                html.Label("Dimensão", className="fw-semibold"),
-                _radio_dimensao("gap"),
-                html.Label("Grupo A (diamante)", className="fw-semibold mt-2"),
-                dcc.Dropdown(id="gap-grupo-a", clearable=False),
-                html.Label("Grupo B (círculo)", className="fw-semibold mt-2"),
-                dcc.Dropdown(id="gap-grupo-b", clearable=False),
-                html.Label("Ano", className="fw-semibold mt-3"),
-                _slider_ano("gap"),
-                html.Hr(),
-                html.Small(
-                    "UFs ordenadas pelo gap absoluto (A − B). "
-                    "Cores indicam a região geográfica.",
-                    className="text-muted",
-                ),
-            ], width=3),
-            dbc.Col(dcc.Graph(id="gap-fig", style={"height": "720px"}), width=9),
-        ])
+painel_serie = dbc.Card([
+    dbc.CardHeader("📈 Série Temporal", className="py-1 fw-semibold"),
+    dbc.CardBody([
+        dbc.Row([
+            dbc.Col(_radio_dimensao("serie"), width="auto"),
+            dbc.Col(dcc.Dropdown(
+                id="serie-ufs",
+                options=[{"label": u, "value": u} for u in UFS_DISP],
+                value=["São Paulo", "Bahia", "Maranhão"],
+                multi=True, placeholder="Estados...", style=_s,
+            ), width=5),
+            dbc.Col(dcc.Checklist(
+                id="serie-grupos", inline=True,
+                inputStyle={"marginRight": "4px", "marginLeft": "8px"},
+                style=_s,
+            ), width="auto"),
+        ], align="center", className="g-2 mb-2"),
+        dcc.Graph(id="serie-fig", style={"height": "360px"}),
+    ], className="p-2"),
+], className="h-100")
 
-    elif tab == "slope":
-        return dbc.Row([
-            dbc.Col([
-                html.Label("Dimensão", className="fw-semibold"),
-                _radio_dimensao("slope"),
-                html.Label("Grupo", className="fw-semibold mt-2"),
-                dcc.Dropdown(id="slope-grupo", clearable=False),
-                html.Label("Ano inicial", className="fw-semibold mt-2"),
-                dcc.Dropdown(
-                    id="slope-ano-a",
-                    options=[{"label": a, "value": a} for a in ANOS_DISP],
-                    value=2015, clearable=False,
-                ),
-                html.Label("Ano final", className="fw-semibold mt-2"),
-                dcc.Dropdown(
-                    id="slope-ano-b",
-                    options=[{"label": a, "value": a} for a in ANOS_DISP],
-                    value=max(ANOS_DISP), clearable=False,
-                ),
-                html.Label("Regiões", className="fw-semibold mt-3"),
-                dcc.Checklist(
-                    id="slope-regioes",
-                    options=[{"label": f"  {r}", "value": r} for r in CORES_REGIAO],
-                    value=list(CORES_REGIAO.keys()),
-                    inputStyle={"marginRight": "6px"},
-                ),
-                html.Hr(),
-                html.Small(
-                    "Espessura da linha proporcional à variação percentual. "
-                    "Cores indicam a região.",
-                    className="text-muted",
-                ),
-            ], width=3),
-            dbc.Col(dcc.Graph(id="slope-fig", style={"height": "720px"}), width=9),
-        ])
+painel_mapa = dbc.Card([
+    dbc.CardHeader("🗺️ Mapa de Disparidade", className="py-1 fw-semibold"),
+    dbc.CardBody([
+        dbc.Row([
+            dbc.Col(dcc.RadioItems(
+                id="mapa-dimensao",
+                options=[
+                    {"label": "  Homens÷Mulheres", "value": "Sexo"},
+                    {"label": "  Branca÷Preta",    "value": "Cor/Raça"},
+                ],
+                value="Sexo", inline=True,
+                inputStyle={"marginRight": "4px", "marginLeft": "8px"},
+            ), width="auto"),
+            dbc.Col(_slider_ano("mapa"), width=5),
+        ], align="center", className="g-2 mb-1"),
+        html.Div(id="mapa-stats", className="small text-muted mb-1"),
+        dcc.Graph(id="mapa-fig", style={"height": "340px"}),
+    ], className="p-2"),
+], className="h-100")
+
+painel_gap = dbc.Card([
+    dbc.CardHeader("↔️ Gap por UF", className="py-1 fw-semibold"),
+    dbc.CardBody([
+        dbc.Row([
+            dbc.Col(_radio_dimensao("gap"), width="auto"),
+            dbc.Col(dcc.Dropdown(id="gap-grupo-a", clearable=False,
+                placeholder="Grupo A", style=_s), width=2),
+            dbc.Col(dcc.Dropdown(id="gap-grupo-b", clearable=False,
+                placeholder="Grupo B", style=_s), width=2),
+            dbc.Col(_slider_ano("gap"), width=4),
+        ], align="center", className="g-2 mb-2"),
+        dcc.Graph(id="gap-fig", style={"height": "360px"}),
+    ], className="p-2"),
+], className="h-100")
+
+painel_slope = dbc.Card([
+    dbc.CardHeader("📉 Slope Chart", className="py-1 fw-semibold"),
+    dbc.CardBody([
+        dbc.Row([
+            dbc.Col(_radio_dimensao("slope"), width="auto"),
+            dbc.Col(dcc.Dropdown(id="slope-grupo", clearable=False,
+                placeholder="Grupo", style=_s), width=2),
+            dbc.Col(dcc.Dropdown(
+                id="slope-ano-a",
+                options=[{"label": a, "value": a} for a in ANOS_DISP],
+                value=2015, clearable=False, style=_s,
+            ), width=2),
+            dbc.Col(dcc.Dropdown(
+                id="slope-ano-b",
+                options=[{"label": a, "value": a} for a in ANOS_DISP],
+                value=max(ANOS_DISP), clearable=False, style=_s,
+            ), width=2),
+            dbc.Col(dcc.Checklist(
+                id="slope-regioes",
+                options=[{"label": f"  {r}", "value": r} for r in CORES_REGIAO],
+                value=list(CORES_REGIAO.keys()),
+                inline=True,
+                inputStyle={"marginRight": "4px", "marginLeft": "6px"},
+                style={"fontSize": "0.75rem"},
+            ), width="auto"),
+        ], align="center", className="g-2 mb-2"),
+        dcc.Graph(id="slope-fig", style={"height": "340px"}),
+    ], className="p-2"),
+], className="h-100")
+
+app.layout = dbc.Container([
+    HEADER,
+    html.Div(id="uf-indicador", className="mb-2", style={"minHeight": "32px"}),
+    dbc.Row([
+        dbc.Col(painel_serie, width=6, className="mb-3"),
+        dbc.Col(painel_mapa,  width=6, className="mb-3"),
+    ]),
+    dbc.Row([
+        dbc.Col(painel_gap,   width=6, className="mb-3"),
+        dbc.Col(painel_slope, width=6, className="mb-3"),
+    ]),
+    dcc.Store(id="uf-selecionada", data=None),
+], fluid=True)
 
 
 # ─── Callbacks: Seleção cross-tab ────────────────────────────────────────────
