@@ -1,7 +1,10 @@
-dash>=2.17
-dash-bootstrap-components>=1.6
+# Dashboard Streamlit (novo) + Dashboard Dash (legado)
+streamlit>=1.40
 plotly>=5.22
 pandas>=2.2
 requests>=2.31
 pyarrow>=16.0
+# Apenas para o app Dash legado (app.py)
+dash>=2.17
+dash-bootstrap-components>=1.6
 gunicorn>=22.0
