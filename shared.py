@@ -28,6 +28,16 @@ ICONES = {"Homens": "♂", "Mulheres": "♀", "Total": "Σ",
 # par usado na razão de desigualdade de cada dimensão (maior ÷ menor)
 PAR_RAZAO = {"Sexo": ("Homens", "Mulheres"), "Cor/Raça": ("Branca", "Preta")}
 
+# rótulo amigável para frases: cor/raça vira "pessoas brancas/pretas/pardas"
+_GRUPO_FRASE = {"Branca": "pessoas brancas", "Preta": "pessoas pretas",
+                "Parda": "pessoas pardas"}
+
+
+def grupo_frase(g, inicio=False):
+    """Nome do grupo para uso em frases. inicio=True deixa a 1ª letra maiúscula."""
+    s = _GRUPO_FRASE.get(g, g)
+    return (s[:1].upper() + s[1:]) if inicio else s
+
 CORES_REGIAO = {"Norte": "#2E86DE", "Nordeste": "#FF9F1C", "Sudeste": "#1DD1A1",
                 "Sul": "#FF2E63", "Centro-Oeste": "#A55EEA"}
 ORDEM_REGIAO = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"]

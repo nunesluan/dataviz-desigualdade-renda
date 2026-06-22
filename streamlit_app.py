@@ -25,11 +25,13 @@ S.inject_css()
 
 import page_overview
 import page_explorar
+import page_poa
 
 nav = st.navigation([
     st.Page(page_overview.render, title="Visão geral", icon="📊",
             url_path="visao-geral", default=True),
     st.Page(page_explorar.render, title="Explorar", icon="🔎", url_path="explorar"),
+    st.Page(page_poa.render, title="Porto Alegre", icon="🏙️", url_path="porto-alegre"),
 ])
 
 with st.sidebar:

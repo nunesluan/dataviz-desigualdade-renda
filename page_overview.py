@@ -53,7 +53,7 @@ def render():
           <div class="kpi-icon" style="background:{cor_r}22;color:{cor_r}">÷</div>
           <div class="kpi-mid"><div class="kpi-label">Razão {g_a[:3]}÷{g_b[:3]}</div>
             <div class="kpi-value">{razao_val:.2f}×</div>
-            <div class="kpi-delta" style="color:#9AA3B2">{g_b} recebem {share:.0f}%</div></div>
+            <div class="kpi-delta" style="color:#9AA3B2">{S.grupo_frase(g_b, inicio=True)} recebem {share:.0f}% do que {S.grupo_frase(g_a)}</div></div>
           <div class="kpi-spark">{S.sparkline(razao_serie.tolist(), cor_r)}</div>
         </div>""")
     st.markdown(f'<div class="kpi-grid" style="grid-template-columns:repeat({len(cards)},1fr)">'
@@ -93,10 +93,10 @@ def render():
         rend_nac = piv["Total"].mean() if "Total" in piv else piv[g_a].mean()
         k1, k2 = st.columns(2)
         k1.markdown(f"<div class='big-stat'><div class='big-num' style='color:{S.ACCENTS[0]}'>"
-                    f"{razao_nac:.2f}×</div><div class='big-cap'>Razão {g_a}÷{g_b}</div></div>",
+                    f"{razao_nac:.2f}×</div><div class='big-cap'>Razão {S.grupo_frase(g_a)} ÷ {S.grupo_frase(g_b)}</div></div>",
                     unsafe_allow_html=True)
         k2.markdown(f"<div class='big-stat'><div class='big-num' style='color:{S.ACCENTS[1]}'>"
-                    f"{share_nac:.0f}%</div><div class='big-cap'>{g_b} recebem do que {g_a}</div></div>",
+                    f"{share_nac:.0f}%</div><div class='big-cap'>é quanto {S.grupo_frase(g_b)} recebem do que {S.grupo_frase(g_a)} ganham</div></div>",
                     unsafe_allow_html=True)
         st.markdown(f"<div class='big-stat' style='text-align:center;margin:.2rem 0 .3rem'>"
                     f"<div class='center-num'>{S.brl(rend_nac)}</div>"
