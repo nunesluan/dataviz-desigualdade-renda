@@ -131,9 +131,14 @@ def render():
     ufs_pool = sorted(dff["uf"].unique())
     default_ufs = [u for u in ["São Paulo", "Bahia", "Maranhão", "Rio Grande do Sul",
                                "Distrito Federal"] if u in ufs_pool][:5]
+    # Conjunto de destaque compartilhado com o clique no mapa (página Visão geral).
+    st.session_state.setdefault(S.DESTAQUE_KEY, default_ufs)
+    st.session_state[S.DESTAQUE_KEY] = [u for u in st.session_state[S.DESTAQUE_KEY]
+                                        if u in ufs_pool]
     ufs_destaque = st.multiselect(
-        "⭐ **UFs em destaque** — usadas na comparação e disponíveis como filtro em cada gráfico",
-        ufs_pool, default=default_ufs, key="x_ufs")
+        "⭐ **UFs em destaque** — sincronizadas com o clique no mapa; usadas na comparação "
+        "e disponíveis como filtro em cada gráfico",
+        ufs_pool, key=S.DESTAQUE_KEY)
     dsel = set(ufs_destaque)
     st.divider()
 

@@ -76,6 +76,20 @@ ID2UF = dict(zip(DF["uf_id_str"], DF["uf"]))
 UF2SIGLA = dict(zip(DF["uf"], DF["sigla"]))
 
 
+def _centroide(geom):
+    """Centróide (média dos vértices do maior anel externo) de um (Multi)Polygon."""
+    polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
+    anel = max((p[0] for p in polys), key=len)  # anel externo do maior polígono
+    lons = [c[0] for c in anel]
+    lats = [c[1] for c in anel]
+    return sum(lons) / len(lons), sum(lats) / len(lats)
+
+
+# centróide de cada UF → alvo clicável (Scattergeo) sobreposto ao Choropleth
+UF_CENTROIDES = {ID2UF[str(f["properties"]["codigo_ibg"])]: _centroide(f["geometry"])
+                 for f in GJ["features"] if str(f["properties"]["codigo_ibg"]) in ID2UF}
+
+
 # ─── Helpers de formatação e figura ─────────────────────────────────────────────
 
 def rgba(hex_cor, alpha):
@@ -282,6 +296,37 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     font-size: .95rem; color: #E6E9EF; margin-bottom: 4px; }
 section[data-testid="stSidebar"] { background: #12151C; }
 .stTabs [data-baseweb="tab"] { font-weight: 600; }
+
+/* ── Título de painel clicável (abre o zoom) — botão "tertiary" estilizado ── */
+.stButton button[kind="tertiary"],
+button[data-testid="stBaseButton-tertiary"] {
+    padding: 0 0 .15rem 0 !important; min-height: 0 !important;
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    color: #fff !important; font-size: 1.05rem !important; font-weight: 700 !important;
+    line-height: 1.2 !important; text-align: left !important;
+    transition: color .18s ease, letter-spacing .18s ease; }
+.stButton button[kind="tertiary"]:hover,
+button[data-testid="stBaseButton-tertiary"]:hover {
+    color: #FF2E63 !important; letter-spacing: .2px; }
+
+/* ── Zoom (st.dialog) com fundo desfocado + animação suave estilo Apple ── */
+div[data-testid="stDialog"] > div,
+div[role="dialog"] {
+    border-radius: 22px !important; border: 1px solid #2A2F3A !important;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55) !important;
+    animation: zoomPop .34s cubic-bezier(.2,.85,.25,1) both; }
+div[data-testid="stDialog"]::backdrop,
+[data-baseweb="modal"] [data-baseweb="modal-backdrop"],
+div[data-testid="stDialogOverlay"] {
+    background: rgba(8,10,14,.55) !important;
+    backdrop-filter: blur(8px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
+    animation: fadeIn .34s ease both; }
+@keyframes zoomPop { from { opacity: 0; transform: scale(.93) translateY(8px); }
+                     to   { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+.zoom-title { font-size: 1.5rem; font-weight: 800; color: #fff; margin: -.2rem 0 .1rem; }
+.zoom-sub { font-size: .9rem; color: #8A93A6; margin: 0 0 .8rem; }
 </style>
 """
 
@@ -306,6 +351,60 @@ def sidebar_filtros():
         g_a, g_b = PAR_RAZAO[dimensao]
         st.caption(f"📌 **Razão** = renda de **{g_a}** ÷ **{g_b}**. "
                    f"Acima de 1 indica vantagem de {g_a}.")
+
+
+# ─── Destaque de UFs (linked highlight, compartilhado entre as páginas) ──────────
+
+DESTAQUE_KEY = "sel_ufs"  # conjunto de UFs realçadas em todas as páginas
+
+
+def destaque_atual():
+    """UFs atualmente realçadas (clique no mapa ⇄ multiselect da página Explorar)."""
+    return list(st.session_state.get(DESTAQUE_KEY, []))
+
+
+def _ufs_do_evento(pts):
+    """Extrai os nomes de UF de uma lista de pontos selecionados (Scattergeo/Choropleth)."""
+    ufs = set()
+    for p in pts:
+        cd = p.get("customdata")
+        if isinstance(cd, (list, tuple)) and cd:
+            ufs.add(str(cd[0]))
+        elif isinstance(cd, str):
+            ufs.add(cd)
+        elif p.get("location") is not None:  # fallback: Choropleth
+            uf = ID2UF.get(str(p["location"]))
+            if uf:
+                ufs.add(uf)
+    return ufs
+
+
+def consumir_selecao_do_mapa(ev):
+    """Alterna no destaque as UFs recém-selecionadas no mapa.
+
+    A seleção do widget Plotly não persiste de forma confiável entre reruns, então não
+    fazemos diff: cada evento com pontos é tratado como "alterne estas UFs" uma única vez.
+    Retorna True se houve seleção a consumir — o chamador deve então renovar o widget
+    (bump no nonce) e dar st.rerun(), zerando a seleção para não reprocessar.
+    """
+    try:
+        pts = ev["selection"]["points"]
+    except (TypeError, KeyError):
+        pts = []
+    ufs = _ufs_do_evento(pts)
+    if not ufs:
+        return False
+    dest = set(st.session_state.get(DESTAQUE_KEY, []))
+    for uf in ufs:
+        dest ^= {uf}  # liga/desliga a UF no destaque
+    st.session_state[DESTAQUE_KEY] = sorted(dest)
+    return True
+
+
+def limpar_destaque():
+    """Limpa o destaque e força um widget de mapa novo (zera a seleção do mapa)."""
+    st.session_state[DESTAQUE_KEY] = []
+    st.session_state["_ov_map_nonce"] = st.session_state.get("_ov_map_nonce", 0) + 1
 
 
 def get_filtros():
